@@ -1,0 +1,19 @@
+# ── Core agent framework ──────────────────────────────────────────────────
+langchain>=0.3.0
+langchain-anthropic>=0.3.0
+langchain-core>=0.3.0
+langgraph>=0.2.0
+
+# ── Blockchain ────────────────────────────────────────────────────────────
+web3>=7.0.0
+
+# ── Data models ───────────────────────────────────────────────────────────
+pydantic>=2.7.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+rich>=13.0.0          # pretty terminal output for the audit trail viewer
+
+# ── Development / testing ─────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
