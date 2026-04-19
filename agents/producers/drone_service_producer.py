@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import time
 
 from shared.cnp_messages import (
@@ -31,7 +32,8 @@ class DroneServiceProducer(ProducerAdapter):
     _BASE_PRICE_PER_DAY  = 620.0
     _MOBILISATION_FEE    = 300.0
     _PAST_PERFORMANCE    = 0.92     # strong flight ops track record
-    _WALLET              = "0x5KyWaTcHoPeRaTiOnS00000000000000000002"
+    # Hardhat account[4] by default; overridden by PRODUCER_SKYWATCH_WALLET after deploy
+    _WALLET = os.getenv("PRODUCER_SKYWATCH_WALLET", "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65")
 
     def can_fulfil(self, announcement: TaskAnnouncement) -> bool:
         supported = {ServiceType.DRONE_SURVEILLANCE, ServiceType.DRONE_INSPECTION}

@@ -21,6 +21,13 @@ pytest-cache-files-*/
 .env
 .env.*
 !.env.example
+!.env.tempo_testnet.example
+
+# Private key files — NEVER commit these
+keys
+keys.*
+*.key
+*.pem
 
 # Editor
 .vscode/
@@ -31,6 +38,9 @@ pytest-cache-files-*/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local scratch scripts
+balenceCheck.zsh
 
 # Build outputs
 dist/

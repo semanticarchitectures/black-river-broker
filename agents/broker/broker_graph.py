@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -49,13 +50,12 @@ from typing_extensions import TypedDict
 
 from shared.cnp_messages import (
     AuditEvent, BidEvaluation, BidScore, CNPStage, ContractAward,
-    DeliveryConfirmation, PaymentSettlement, ProducerBid,
+    DeliveryConfirmation, ExecutionUpdate, PaymentSettlement, ProducerBid,
     ServiceRequirement, TaskAnnouncement,
 )
 from agents.interfaces.producer_adapter import ProducerAdapter
 from agents.interfaces.consumer_adapter import ConsumerAdapter
 from agents.broker.chain_client import ChainClient
-from agents.mpp.mpp_simulator import MPPSimulator
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +101,11 @@ class BrokerAgent:
       - producers   : list of ProducerAdapter implementations
       - consumer    : ConsumerAdapter implementation
       - chain       : ChainClient for on-chain writes
-      - mpp         : MPPSimulator (Phase 1) or real MPP client (Phase 2+)
       - llm_model   : Anthropic model string (default: claude-sonnet-4-6)
+
+    Phase 2 note: MPPSimulator has been removed.  Payment settlement is
+    derived directly from the on-chain settlePayment() transaction receipt —
+    the BlackRiverBroker contract IS the payment rail.
     """
 
     MAX_RE_EVALS = 2        # max times to re-evaluate after producer rejection
@@ -113,16 +116,19 @@ class BrokerAgent:
         producers:   List[ProducerAdapter],
         consumer:    ConsumerAdapter,
         chain:       ChainClient,
-        mpp:         MPPSimulator,
+        mpp:         Any = None,   # deprecated — ignored; kept for call-site compatibility
         llm_model:   str = "claude-sonnet-4-6",
         broker_wallet: str = "0x0000000000000000000000000000000000000001",
+        dry_run:     bool = False,
     ):
         self.producers     = {p.PRODUCER_ID: p for p in producers}
         self.consumer      = consumer
         self.chain         = chain
-        self.mpp           = mpp
         self.broker_wallet = broker_wallet
-        self.llm = ChatAnthropic(model=llm_model, temperature=0)
+        self.dry_run       = dry_run
+        # Only initialise the LLM if we'll actually use it (requires ANTHROPIC_API_KEY)
+        has_key = bool(os.getenv("ANTHROPIC_API_KEY"))
+        self.llm = ChatAnthropic(model=llm_model, temperature=0) if (has_key and not dry_run) else None
         self._graph = self._build_graph()
 
     # ── Graph construction ────────────────────────────────────────────────
@@ -271,7 +277,7 @@ class BrokerAgent:
         raw_scores.sort(key=lambda x: x[4], reverse=True)
         winner_bid = raw_scores[0][0]
 
-        # ── LLM-generated rationale ───────────────────────────────────────
+        # ── LLM-generated rationale (skipped in dry-run) ─────────────────
         scores_summary = "\n".join([
             f"- {b.producer_name}: price=${b.price_usdc:.2f} "
             f"(score={ps:.2f}), available={b.available}, "
@@ -279,23 +285,33 @@ class BrokerAgent:
             f"weighted_total={w:.3f}"
             for b, ps, _, _, w in raw_scores
         ])
-        prompt = [
-            SystemMessage(content=(
-                "You are the Black River autonomous broker. "
-                "Write a concise (2-3 sentence) award rationale explaining why the "
-                "top-scoring producer won, referencing the evaluation criteria weights."
-            )),
-            HumanMessage(content=(
-                f"Requirement: {req.description}\n"
-                f"Criteria weights — price: {criteria.price_weight}, "
-                f"availability: {criteria.availability_weight}, "
-                f"past performance: {criteria.past_performance_weight}\n\n"
-                f"Bid scores:\n{scores_summary}\n\n"
-                f"Winner: {winner_bid.producer_name}"
-            )),
-        ]
-        rationale_response = self.llm.invoke(prompt)
-        winner_rationale   = rationale_response.content
+
+        if self.llm is None:
+            winner_rationale = (
+                f"{winner_bid.producer_name} selected with weighted score "
+                f"{raw_scores[0][4]:.3f} (price {criteria.price_weight*100:.0f}% / "
+                f"availability {criteria.availability_weight*100:.0f}% / "
+                f"performance {criteria.past_performance_weight*100:.0f}%). "
+                f"[{'dry-run' if self.dry_run else 'no ANTHROPIC_API_KEY'}: LLM rationale skipped]"
+            )
+        else:
+            prompt = [
+                SystemMessage(content=(
+                    "You are the Black River autonomous broker. "
+                    "Write a concise (2-3 sentence) award rationale explaining why the "
+                    "top-scoring producer won, referencing the evaluation criteria weights."
+                )),
+                HumanMessage(content=(
+                    f"Requirement: {req.description}\n"
+                    f"Criteria weights — price: {criteria.price_weight}, "
+                    f"availability: {criteria.availability_weight}, "
+                    f"past performance: {criteria.past_performance_weight}\n\n"
+                    f"Bid scores:\n{scores_summary}\n\n"
+                    f"Winner: {winner_bid.producer_name}"
+                )),
+            ]
+            rationale_response = self.llm.invoke(prompt)
+            winner_rationale   = rationale_response.content
 
         # ── Build BidEvaluation ───────────────────────────────────────────
         bid_scores = [
@@ -394,12 +410,23 @@ class BrokerAgent:
         logger.info(f"[BROKER] Monitoring execution for award {award.award_id}")
 
         import time
-        while True:
-            update = producer.get_status(award.award_id)
-            logger.info(f"  ↻ {producer.PRODUCER_NAME}: {update.status} ({update.progress_pct:.0f}%)")
-            if update.status == "COMPLETE":
-                break
-            time.sleep(2)  # poll interval — reduce in tests
+        if self.dry_run:
+            # In dry-run skip real-time polling — assume execution completes immediately
+            update = ExecutionUpdate(
+                award_id=    award.award_id,
+                producer_id= award.producer_id,
+                status=      "COMPLETE",
+                progress_pct=100.0,
+                notes=       "[dry-run] execution simulated as instant",
+            )
+            logger.info(f"  ↻ {producer.PRODUCER_NAME}: {update.status} (100%) [dry-run]")
+        else:
+            while True:
+                update = producer.get_status(award.award_id)
+                logger.info(f"  ↻ {producer.PRODUCER_NAME}: {update.status} ({update.progress_pct:.0f}%)")
+                if update.status == "COMPLETE":
+                    break
+                time.sleep(2)
 
         event = self._make_audit_event(
             req.requirement_id, CNPStage.EXECUTING,
@@ -420,17 +447,24 @@ class BrokerAgent:
         producer = self.producers[award.producer_id]
         req      = state["requirement"]
 
+        # 1. Get delivery evidence from producer
         delivery = producer.confirm_delivery(award.award_id)
 
-        # Write delivery hash on-chain
+        # 2. Write delivery hash on-chain → contract advances to DELIVERED
         self.chain.confirm_delivery(award.award_id, delivery.delivery_hash)
 
-        # Trigger payment via MPP
-        settlement = self.mpp.settle(
-            award_id=        award.award_id,
-            producer_wallet= award.producer_wallet,
-            amount_usdc=     award.price_usdc,
-            memo=            f"{award.award_id}:{req.requirement_id}",
+        # 3. Release escrowed USDC to producer → contract advances to SETTLED
+        #    The on-chain tx IS the payment; no external payment rail is needed.
+        chain_result = self.chain.settle_payment(award.award_id)
+
+        # 4. Build a PaymentSettlement record from the chain receipt
+        settlement = PaymentSettlement(
+            award_id=       award.award_id,
+            producer_wallet=award.producer_wallet,
+            amount_usdc=    award.price_usdc,
+            tx_hash=        chain_result["tx_hash"],
+            memo=           f"{award.award_id}:{req.requirement_id}"[:32],
+            settled_at=     datetime.utcnow(),
         )
 
         delivered_event = self._make_audit_event(
@@ -442,7 +476,8 @@ class BrokerAgent:
         settled_event = self._make_audit_event(
             req.requirement_id, CNPStage.SETTLED,
             "broker",
-            f"Payment of ${award.price_usdc:.2f} USDC settled. Tx: {settlement.tx_hash}",
+            f"Payment of ${award.price_usdc:.2f} USDC settled on-chain. "
+            f"Tx: {settlement.tx_hash[:20]}...",
             settlement,
         )
 

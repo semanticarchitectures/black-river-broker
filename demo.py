@@ -1,20 +1,20 @@
 """
 demo.py
 ────────
-Black River Phase 1 Demo Runner.
+Black River Demo Runner — Phase 2.
 
 Runs a complete end-to-end procurement cycle:
-  consumer → broker → producers → chain → payment
+  consumer → broker → producers → chain (Base Sepolia or local Hardhat)
 
 Usage:
-  # 1. Start local Hardhat node (in a separate terminal)
-  npx hardhat node
-
-  # 2. Deploy contracts
-  npx hardhat run scripts/deploy.ts --network localhost
-
-  # 3. Run the demo
+  # Local Hardhat (Phase 1 workflow, still supported)
+  npx hardhat node                         # terminal 1
+  node scripts/deploy_local.js             # terminal 2
   python demo.py
+
+  # Base Sepolia testnet (Phase 2)
+  node scripts/deploy_tempo_testnet.js     # one-time deploy
+  python demo.py --env .env.tempo_testnet
 
   # Dry-run (no chain writes — for CI / quick smoke tests)
   python demo.py --dry-run
@@ -31,18 +31,6 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-# Load .env.local first (deploy script output), then .env
-load_dotenv(".env.local", override=True)
-load_dotenv(".env", override=False)
-
-from shared.cnp_messages import CNPStage
-from agents.broker.broker_graph import BrokerAgent
-from agents.broker.chain_client import ChainClient
-from agents.mpp.mpp_simulator import MPPSimulator
-from agents.consumer.consumer_simulator import ConsumerSimulator
-from agents.producers.drone_ops_producer import DroneOpsSoftwareProducer
-from agents.producers.drone_service_producer import DroneServiceProducer
-
 console = Console()
 
 logging.basicConfig(
@@ -52,8 +40,34 @@ logging.basicConfig(
 )
 
 
-def main(dry_run: bool = False) -> None:
-    console.rule("[bold blue]Project Black River — Phase 1 Demo[/bold blue]")
+def main(dry_run: bool = False, env_file: str | None = None) -> None:
+    # ── Load environment ──────────────────────────────────────────────────
+    # Priority: explicit --env file > .env.local (local deploy output) > .env
+    if env_file:
+        load_dotenv(env_file, override=True)
+    load_dotenv(".env.local",          override=not bool(env_file))
+    load_dotenv(".env",                override=False)
+
+    # ── Import after env is loaded ────────────────────────────────────────
+    from shared.cnp_messages import CNPStage
+    from agents.broker.broker_graph import BrokerAgent
+    from agents.broker.chain_client import ChainClient
+    from agents.consumer.consumer_simulator import ConsumerSimulator
+    from agents.producers.drone_ops_producer import DroneOpsSoftwareProducer
+    from agents.producers.drone_service_producer import DroneServiceProducer
+
+    rpc_url = (
+        os.getenv("TEMPO_TESTNET_RPC")
+        or os.getenv("HARDHAT_RPC", "http://127.0.0.1:8545")
+    )
+
+    network_label = (
+        "Tempo testnet"  if "tempo.xyz" in rpc_url
+        else "local Hardhat" if "127.0.0.1" in rpc_url or "localhost" in rpc_url
+        else rpc_url
+    )
+
+    console.rule(f"[bold blue]Project Black River — Phase 2 Demo  [{network_label}][/bold blue]")
     console.print()
 
     # ── Wire up components ────────────────────────────────────────────────
@@ -61,7 +75,7 @@ def main(dry_run: bool = False) -> None:
     producers = [DroneOpsSoftwareProducer(), DroneServiceProducer()]
 
     chain = ChainClient(
-        rpc_url=              os.getenv("HARDHAT_RPC", "http://127.0.0.1:8545"),
+        rpc_url=              rpc_url,
         broker_wallet=        os.getenv("BROKER_WALLET", ""),
         private_key=          os.getenv("DEPLOYER_PRIVATE_KEY", ""),
         audit_log_addr=       os.getenv("AUDIT_LOG_ADDRESS", ""),
@@ -70,14 +84,12 @@ def main(dry_run: bool = False) -> None:
         dry_run=              dry_run,
     )
 
-    mpp = MPPSimulator(dry_run=dry_run)
-
     broker = BrokerAgent(
         producers=     producers,
         consumer=      consumer,
         chain=         chain,
-        mpp=           mpp,
         broker_wallet= os.getenv("BROKER_WALLET", "0x0000000000000000000000000000000000000001"),
+        dry_run=       dry_run,
     )
 
     # ── Get requirement from consumer ─────────────────────────────────────
@@ -148,10 +160,15 @@ def main(dry_run: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Black River Phase 1 Demo")
+    parser = argparse.ArgumentParser(description="Black River Demo")
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="Skip on-chain writes (useful for CI and quick tests)"
+        help="Skip on-chain writes (useful for CI and quick tests)",
+    )
+    parser.add_argument(
+        "--env", metavar="FILE", default=None,
+        help="Env file to load (e.g. .env.tempo_testnet). "
+             "Overrides .env.local / .env.",
     )
     args = parser.parse_args()
-    main(dry_run=args.dry_run)
+    main(dry_run=args.dry_run, env_file=args.env)

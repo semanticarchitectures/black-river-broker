@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -36,7 +37,8 @@ class DroneOpsSoftwareProducer(ProducerAdapter):
     _BASE_PRICE_PER_DAY   = 350.0    # USDC per day of coverage
     _PLATFORM_FEE         = 150.0    # flat software platform fee
     _PAST_PERFORMANCE     = 0.88     # strong software track record
-    _WALLET               = "0xAeRoPlAnSyStEmS000000000000000000000001"
+    # Hardhat account[3] by default; overridden by PRODUCER_AEROPLAN_WALLET after deploy
+    _WALLET = os.getenv("PRODUCER_AEROPLAN_WALLET", "0x90F79bf6EB2c4f870365E785982E1f101E93b906")
 
     def can_fulfil(self, announcement: TaskAnnouncement) -> bool:
         """Can handle drone surveillance and inspection types."""
