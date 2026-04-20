@@ -1,24 +1,36 @@
 """
 demo.py
 ────────
-Black River Demo Runner — Phase 2.
+Black River Demo Runner — Phase 3.
 
 Runs a complete end-to-end procurement cycle:
-  consumer → broker → producers → chain (Base Sepolia or local Hardhat)
+  consumer → broker → producers → chain (Tempo testnet or local Hardhat)
 
 Usage:
-  # Local Hardhat (Phase 1 workflow, still supported)
+  # Local Hardhat with simulated producers (Phase 1/2 workflow)
   npx hardhat node                         # terminal 1
   node scripts/deploy_local.js             # terminal 2
   python demo.py
 
-  # Base Sepolia testnet (Phase 2)
+  # Tempo testnet with simulated producers (Phase 2)
   node scripts/deploy_tempo_testnet.js     # one-time deploy
   python demo.py --env .env.tempo_testnet
 
+  # Tempo testnet with real partner APIs (Phase 3)
+  python demo.py --env .env.phase3 --phase 3
+
   # Dry-run (no chain writes — for CI / quick smoke tests)
   python demo.py --dry-run
+  python demo.py --dry-run --phase 3
+
+Phase 3 env vars (see .env.phase3.example):
+  DRONEDEPLOY_API_KEY          DroneDeploy REST API key
+  SKYDIO_API_TOKEN             Skydio Cloud API token
+  PRODUCER_DRONEDEPLOY_WALLET  on-chain wallet for DroneDeploy payment
+  PRODUCER_SKYDIO_WALLET       on-chain wallet for Skydio payment
 """
+
+from __future__ import annotations
 
 import argparse
 import logging
@@ -40,7 +52,19 @@ logging.basicConfig(
 )
 
 
-def main(dry_run: bool = False, env_file: str | None = None) -> None:
+def _build_producers(phase: int, dry_run: bool = False):
+    """Return the producer list for the requested phase."""
+    if phase == 3:
+        from agents.producers.dronedeploy_producer import DroneDeployProducer
+        from agents.producers.skydio_producer import SkydioProducer
+        return [DroneDeployProducer(dry_run=dry_run), SkydioProducer(dry_run=dry_run)]
+    # Phase 1 / 2: simulated producers
+    from agents.producers.drone_ops_producer import DroneOpsSoftwareProducer
+    from agents.producers.drone_service_producer import DroneServiceProducer
+    return [DroneOpsSoftwareProducer(), DroneServiceProducer()]
+
+
+def main(dry_run: bool = False, env_file: str | None = None, phase: int = 2) -> None:
     # ── Load environment ──────────────────────────────────────────────────
     # Priority: explicit --env file > .env.local (local deploy output) > .env
     if env_file:
@@ -53,8 +77,6 @@ def main(dry_run: bool = False, env_file: str | None = None) -> None:
     from agents.broker.broker_graph import BrokerAgent
     from agents.broker.chain_client import ChainClient
     from agents.consumer.consumer_simulator import ConsumerSimulator
-    from agents.producers.drone_ops_producer import DroneOpsSoftwareProducer
-    from agents.producers.drone_service_producer import DroneServiceProducer
 
     rpc_url = (
         os.getenv("TEMPO_TESTNET_RPC")
@@ -62,17 +84,23 @@ def main(dry_run: bool = False, env_file: str | None = None) -> None:
     )
 
     network_label = (
-        "Tempo testnet"  if "tempo.xyz" in rpc_url
+        "Tempo testnet"    if "tempo.xyz" in rpc_url
         else "local Hardhat" if "127.0.0.1" in rpc_url or "localhost" in rpc_url
         else rpc_url
     )
 
-    console.rule(f"[bold blue]Project Black River — Phase 2 Demo  [{network_label}][/bold blue]")
+    phase_label = f"Phase {phase}"
+    console.rule(
+        f"[bold blue]Project Black River — {phase_label} Demo  [{network_label}][/bold blue]"
+    )
     console.print()
 
     # ── Wire up components ────────────────────────────────────────────────
     consumer  = ConsumerSimulator()
-    producers = [DroneOpsSoftwareProducer(), DroneServiceProducer()]
+    producers = _build_producers(phase, dry_run=dry_run)
+
+    producer_names = ", ".join(p.PRODUCER_NAME for p in producers)
+    console.print(f"[dim]Producers:[/dim] {producer_names}\n")
 
     chain = ChainClient(
         rpc_url=              rpc_url,
@@ -167,8 +195,18 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--env", metavar="FILE", default=None,
-        help="Env file to load (e.g. .env.tempo_testnet). "
+        help="Env file to load (e.g. .env.tempo_testnet, .env.phase3). "
              "Overrides .env.local / .env.",
     )
+    parser.add_argument(
+        "--phase", type=int, default=2, choices=[1, 2, 3],
+        help=(
+            "Producer set to use: "
+            "2 = simulated (default), "
+            "3 = real partner APIs (DroneDeploy + Skydio). "
+            "Also reads PHASE env var."
+        ),
+    )
     args = parser.parse_args()
-    main(dry_run=args.dry_run, env_file=args.env)
+    effective_phase = int(os.getenv("PHASE", args.phase))
+    main(dry_run=args.dry_run, env_file=args.env, phase=effective_phase)

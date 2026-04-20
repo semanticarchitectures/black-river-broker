@@ -18,9 +18,13 @@ rich>=13.0.0          # pretty terminal output for the audit trail viewer
 # ── Phase 2: MPP broker server ────────────────────────────────────────────
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
-httpx>=0.27.0          # async HTTP client for mpp_consumer dry-run mode
+httpx>=0.27.0          # async HTTP client for mpp_consumer + Phase 3 producers
 pympp[tempo]>=0.1.0    # Machine Payments Protocol SDK (pip install 'pympp[tempo]')
+
+# ── Phase 3: real partner API adapters ────────────────────────────────────
+tenacity>=8.3.0        # retry / exponential back-off for HTTP producers
 
 # ── Development / testing ─────────────────────────────────────────────────
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+respx>=0.21.0          # httpx request mocking for Phase 3 adapter tests
