@@ -74,6 +74,8 @@ class SkydioProducer(HttpProducerBase):
     _base_url = "https://api.skydio.com/api/v0"
 
     def __init__(self, dry_run: bool = False) -> None:
+        # Allow SKYDIO_API_URL to redirect traffic to a local mock server
+        self._base_url = os.environ.get("SKYDIO_API_URL", self._base_url)
         super().__init__(timeout=20.0, dry_run=dry_run)
         self._api_token = os.environ["SKYDIO_API_TOKEN"]
         self._wallet    = os.environ.get(
