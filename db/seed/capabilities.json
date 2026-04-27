@@ -1,0 +1,133 @@
+{
+  "service_types": [
+    {
+      "type": "aerial_photography",
+      "label": "Aerial Photography",
+      "description": "RGB imagery from drone-mounted cameras. Deliverables: JPEG/TIFF photos, geo-tagged, may include orthoimage mosaic.",
+      "typical_units": ["flight", "km2", "day"],
+      "common_use_cases": ["site documentation", "marketing imagery", "progress photos"]
+    },
+    {
+      "type": "lidar_scanning",
+      "label": "LiDAR Scanning",
+      "description": "3D point cloud capture using laser ranging. Deliverables: LAZ/LAS point cloud, DEM, DSM, contours.",
+      "typical_units": ["flight", "km2"],
+      "common_use_cases": ["topographic survey", "volumetric calculation", "as-built documentation"]
+    },
+    {
+      "type": "multispectral_imaging",
+      "label": "Multispectral Imaging",
+      "description": "Near-IR and visible band imagery for vegetation and crop health analysis. Deliverables: band-separated TIFF, NDVI maps.",
+      "typical_units": ["flight", "km2", "day"],
+      "common_use_cases": ["crop health monitoring", "irrigation planning", "agricultural compliance"]
+    },
+    {
+      "type": "thermal_imaging",
+      "label": "Thermal Imaging",
+      "description": "Infrared thermography for heat detection. Deliverables: thermal TIFF, false-colour overlays.",
+      "typical_units": ["flight", "hour"],
+      "common_use_cases": ["building envelope inspection", "solar panel inspection", "search and rescue"]
+    },
+    {
+      "type": "photogrammetry",
+      "label": "Photogrammetry",
+      "description": "Structure-from-motion processing of overlapping imagery into 3D models. Deliverables: point cloud, mesh, textured model, orthoimage.",
+      "typical_units": ["flight", "km2"],
+      "common_use_cases": ["as-built surveys", "stockpile volume", "heritage documentation"]
+    },
+    {
+      "type": "3d_modeling",
+      "label": "3D Modeling",
+      "description": "Processed photogrammetry or LiDAR delivered as CAD-ready or game-engine-ready 3D model.",
+      "typical_units": ["project", "km2"],
+      "common_use_cases": ["BIM integration", "design review", "client visualisation"]
+    },
+    {
+      "type": "inspection",
+      "label": "Inspection",
+      "description": "Close-range visual or sensor inspection of structures, assets, or infrastructure.",
+      "typical_units": ["hour", "asset", "flight"],
+      "common_use_cases": ["bridge inspection", "cell tower inspection", "wind turbine inspection"]
+    },
+    {
+      "type": "construction_progress",
+      "label": "Construction Progress Documentation",
+      "description": "Recurring photogrammetry or RGB flights tied to construction milestones. Deliverables: orthoimage series, delta overlays, progress reports.",
+      "typical_units": ["visit", "month", "phase"],
+      "common_use_cases": ["construction site monitoring", "milestone reporting", "owner progress updates"]
+    },
+    {
+      "type": "mapping",
+      "label": "Mapping",
+      "description": "Planimetric or topographic map production from drone data. Deliverables: georeferenced raster, vector layers, contour lines.",
+      "typical_units": ["km2", "project"],
+      "common_use_cases": ["land survey", "utility corridor mapping", "environmental assessment"]
+    },
+    {
+      "type": "surveillance",
+      "label": "Surveillance",
+      "description": "Persistent or repeated monitoring of a site or asset over time.",
+      "typical_units": ["day", "hour", "month"],
+      "common_use_cases": ["perimeter security", "event monitoring", "infrastructure watch"]
+    }
+  ],
+
+  "certifications": [
+    {
+      "name": "FAA Part 107",
+      "issuer": "Federal Aviation Administration",
+      "country": "USA",
+      "description": "US remote pilot certificate required for commercial drone operations.",
+      "required_for_commercial": true
+    },
+    {
+      "name": "Transport Canada RPAS Basic",
+      "issuer": "Transport Canada",
+      "country": "Canada",
+      "description": "Basic RPAS pilot certificate for commercial drone operations in Canada."
+    },
+    {
+      "name": "Transport Canada RPAS Advanced",
+      "issuer": "Transport Canada",
+      "country": "Canada",
+      "description": "Advanced RPAS certificate allowing operations in controlled airspace."
+    },
+    {
+      "name": "EASA A2 Certificate of Competency",
+      "issuer": "EASA / national authority",
+      "country": "EU",
+      "description": "European A2 CofC for operations close to uninvolved persons."
+    },
+    {
+      "name": "CAA PfCO",
+      "issuer": "UK Civil Aviation Authority",
+      "country": "UK",
+      "description": "UK Permission for Commercial Operations."
+    },
+    {
+      "name": "General Liability Insurance",
+      "issuer": "varies",
+      "description": "Commercial general liability insurance; minimum $1M per occurrence typical."
+    },
+    {
+      "name": "Aviation Liability Insurance",
+      "issuer": "varies",
+      "description": "Aviation-specific liability covering drone operations."
+    },
+    {
+      "name": "ISO 9001",
+      "issuer": "ISO",
+      "description": "Quality management system certification."
+    }
+  ],
+
+  "price_models": [
+    {"model": "per_flight",    "unit": "flight",  "description": "Fixed price per discrete flight mission"},
+    {"model": "per_day",       "unit": "day",     "description": "Day rate covering all flights within a working day"},
+    {"model": "per_km2",       "unit": "km2",     "description": "Area-based pricing"},
+    {"model": "per_hour",      "unit": "hour",    "description": "Hourly rate for pilot + equipment"},
+    {"model": "fixed_project", "unit": "project", "description": "Single fixed price for a defined project scope"},
+    {"model": "monthly",       "unit": "month",   "description": "Monthly retainer for a defined service level"},
+    {"model": "per_visit",     "unit": "visit",   "description": "Per site visit (may include multiple flights)"}
+  ]
+}
